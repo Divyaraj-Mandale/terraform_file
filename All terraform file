@@ -1,0 +1,1074 @@
+
+************Terraform program******************
+
+export AWS_ACCESS_KEY_ID="AKIAZPIV3HRQP7SVWYFI"
+export AWS_SECRET_ACCESS_KEY="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"
+export AWS_DEFAULT_REGION="us-east-2"
+
+
+env | grep -i aws
+printenv
+
+************** OR ************
+
+provider "aws" {
+  region = "us-east-2"
+  access_key = "AKIAZPIV3HRQP7SVWYFI"
+  secret_key = "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"
+}
+
+
+provider "aws" {
+  region = "us-east-2"
+  access_key = "AKIAYETGAUZJMXXIMBSH"
+  secret_key = "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"
+}
+ 
+****************VPC***************
+[root@ip-172-31-29-236 vpc]# cat vpc1.tf 
+resource "aws_vpc" "first-vpc" {
+  cidr_block = "10.0.0.0/16"
+ 
+tags = {
+   Name = "raj"
+}
+}
+resource "aws_subnet" "subnet-1" {
+  vpc_id = aws_vpc.first-vpc.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+   Name = "Prod"
+}
+}
+
+
+
+*****************EC2********************
+
+[root@ip-172-31-29-236 ~]# cat ec2/ec2.tf 
+resource "aws_instance" "web" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "HelloWorld"
+  }
+}
+
+
+*******************EC2 with credential*****************
+
+[root@ip-172-31-29-236 ~]# cat ec2/ec2.tf 
+
+provider "aws" {
+  region = "us-east-2"
+  access_key = "AKIAYDHD222T33MCPCFX"
+  secret_key = "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"
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "HelloWorld"
+  }
+}
+
+
+***************Auto-scalling*************
+
+[root@ip-172-31-29-236 autoscale]# cat autoscale.tf 
+resource "aws_launch_template" "auto_scale" {
+  name_prefix = "auto_scale"
+  image_id = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+}
+
+
+resource "aws_autoscaling_group" "bar" {
+  availability_zones = ["us-east-2b"]
+  max_size                  = 5
+  min_size                  = 1
+  desired_capacity          = 1
+
+  launch_template{
+  id = aws_launch_template.auto_scale.id
+  version = "$Latest"
+
+}
+}
+
+****************Given by mam*********
+
+[root@ip-172-31-27-154 ec2]# cat ec2-simple.tf
+provider "aws" {
+   region = "us-east-2"
+   access_key = "AKIAZPIV3HRQP7SVWYFI"
+   secret_key = "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"
+
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t3.micro"
+
+  tags = {
+    Name = "HelloWorld"
+  }
+}
+[root@ip-172-31-27-154 ec2]# history
+    1  cd
+    2  yum update -y
+    3  sudo yum install -y yum-utils
+    4  sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+    5  sudo yum -y install terraform
+    6  terraform --version
+    7  mkdir ec2
+    8  cd ec2
+    9  vi ec2-simple.tf
+   10  terraform init
+   11  terraform plan
+   12  terraform apply
+   13  vi ec2-simple.tf
+   14  terraform destroy
+   15  cat ec2-simple.tf
+   16  history
+   
+   
+   
+   ***********************EC2 with myVpc and Security group*************************
+
+[root@ip-172-31-29-236 ec2-full]# cat ec2-full.tf 
+provider "aws" {
+  region = "us-east-2"
+  access_key = "AKIAZPIV3HRQP7SVWYFI"
+  secret_key = "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"
+}
+
+resource "aws_vpc" "myVpc" {
+  cidr_block = "10.0.0.0/16"
+
+tags = {
+   Name = "raj"
+}
+}
+
+
+
+
+resource "aws_subnet" "subnet" {
+  vpc_id     = aws_vpc.myVpc.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "subnet"
+  }
+}
+
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.myVpc.id
+
+  tags = {
+    Name = "myIgw"
+  }
+}
+
+
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.myVpc.id
+
+  route = []
+
+  tags = {
+    Name = "rt"
+  }
+}
+
+
+resource "aws_route" "route" {
+  route_table_id            = aws_route_table.rt.id
+  destination_cidr_block    = "0.0.0.0/0"
+  gateway_id                = aws_internet_gateway.igw.id
+  depends_on                = [aws_route_table.rt]
+}
+
+
+
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.subnet.id
+  route_table_id = aws_route_table.rt.id
+}
+
+
+resource "aws_security_group" "sg" {
+  name        = "allow_all"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.myVpc.id
+
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 0       # all port
+    to_port          = 0       # all port
+    protocol         = "-1"    # all traffic
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = null
+    prefix_list_ids  = null
+   security_groups   = null
+   self              = null 
+
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+    description      = "optput"
+    prefix_list_ids  = null
+   security_groups   = null
+   self              = null
+
+  }
+
+  tags = {
+    Name = "allow_all_traffic"
+  }
+}
+
+
+
+resource "aws_instance" "ec2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = aws_subnet.subnet.id
+   
+  tags = {
+    Name = "HelloWorld"
+  }
+}
+
+
+
+***************2 Ec2 instance in 2 different subnet of same vpc ****************************************************************
+
+
+[root@ip-172-31-29-236 ec2-full]# cat ec2-full.tf 
+provider "aws" {
+  region = "us-east-2"
+  access_key = "AKIAZPIV3HRQP7SVWYFI"
+  secret_key = "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"
+}
+
+resource "aws_vpc" "myVpc" {
+  cidr_block = "10.0.0.0/16"
+
+tags = {
+   Name = "raj"
+}
+}
+
+
+
+
+resource "aws_subnet" "subnet1" {
+  vpc_id     = aws_vpc.myVpc.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "subnet1"
+  }
+}
+
+
+resource "aws_subnet" "subnet2" {
+  vpc_id     = aws_vpc.myVpc.id
+  cidr_block = "10.0.11.0/24"
+
+  tags = {
+    Name = "subnet2"
+  }
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.myVpc.id
+
+  tags = {
+    Name = "myIgw"
+  }
+}
+
+
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.myVpc.id
+
+  route = []
+
+  tags = {
+    Name = "rt"
+  }
+}
+
+
+resource "aws_route" "route" {
+  route_table_id            = aws_route_table.rt.id
+  destination_cidr_block    = "0.0.0.0/0"
+  gateway_id                = aws_internet_gateway.igw.id
+  depends_on                = [aws_route_table.rt]
+}
+
+
+
+resource "aws_route_table_association" "a1" {
+  subnet_id      = aws_subnet.subnet1.id
+  route_table_id = aws_route_table.rt.id
+}
+
+resource "aws_route_table_association" "a2" {
+  subnet_id      = aws_subnet.subnet2.id
+  route_table_id = aws_route_table.rt.id
+}
+
+resource "aws_security_group" "sg" {
+  name        = "allow_all"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.myVpc.id
+
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 0       # all port
+    to_port          = 0       # all port
+    protocol         = "-1"    # all traffic
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = null
+    prefix_list_ids  = null
+   security_groups   = null
+   self              = null 
+
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+    description      = "optput"
+    prefix_list_ids  = null
+   security_groups   = null
+   self              = null
+
+  }
+
+  tags = {
+    Name = "allow_all_traffic"
+  }
+}
+
+
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = aws_subnet.subnet1.id
+  key_name    = "LG"
+  tags = {
+    Name = "HelloWorld1"
+  }
+}
+
+resource "aws_instance" "ec2-2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = aws_subnet.subnet2.id
+    key_name    = "LG"
+  tags = {
+    Name = "HelloWorld2"
+  }
+}
+
+
+
+*****************Ec2 using data for subnet**************
+
+[root@ip-172-31-29-236 data]# cat data.tf 
+provider "aws" {
+  region = "us-east-2"
+}
+
+
+data "aws_subnet" "selected" {
+   filter {
+    name   = "tag:Name"
+    values = ["subnet-2b"]
+  }
+}
+
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = data.aws_subnet.selected.id
+  key_name    = "LG"
+  tags = {
+    Name = "HelloWorld1"
+  }
+}
+
+*********************Ec2 using data for subnet using variable**************
+
+[root@ip-172-31-29-236 data]# cat variable.tf 
+provider "aws" {
+  region = "us-east-2"
+}
+
+variable "subnet_name" {
+  type        = string
+  default     = "subnet-2a"
+  description = "The id of the machine image (AMI) to use for the server."
+}
+
+variable "key_name" {
+  type        = string
+  default     = "LG"  
+}
+
+data "aws_subnet" "selected" {
+   filter {
+    name   = "tag:Name"
+    values = [var.subnet_name]
+  }
+}
+
+
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = data.aws_subnet.selected.id
+  key_name    = var.key_name
+  tags = {
+    Name = "HelloWorld1"
+  }
+}
+
+
+****************File Sepration*************
+
+[root@ip-172-31-29-236 file_sepration]# ls
+data.tf  main.tf  output.tf  provider.tf  terraform.tfstate  terraform.tfstate.backup  variables.tf
+
+[root@ip-172-31-29-236 file_sepration]# cat data.tf 
+data "aws_subnet" "selected" {
+   filter {
+    name   = "tag:Name"
+    values = [var.subnet_name]
+  }
+}
+
+[root@ip-172-31-29-236 file_sepration]# cat main.tf 
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = data.aws_subnet.selected.id
+  key_name    = var.key_name
+  tags = {
+    Name = "HelloWorld1"
+  }
+}
+
+[root@ip-172-31-29-236 file_sepration]# cat output.tf 
+output "ec2_arn" {
+  value = aws_instance.ec2-1.arn 
+}
+
+output "ec2_public_ip" {
+  value = aws_instance.ec2-1.public_ip
+}
+
+output "ec2_private_ip" {
+  value = aws_instance.ec2-1.private_ip
+}
+
+output "ec2_subnet_id" {
+  value = aws_instance.ec2-1.subnet_id
+}
+
+[root@ip-172-31-29-236 file_sepration]# cat provider.tf 
+provider "aws" {
+  region = "us-east-2"
+}
+
+[root@ip-172-31-29-236 file_sepration]# cat variables.tf 
+variable "subnet_name" {
+  type        = string
+  default     = "subnet-2a"
+  description = "The id of the machine image (AMI) to use for the server."
+}
+
+variable "key_name" {
+  type        = string
+  default     = "LG"  
+}
+
+
+history********
+173  mkdir file_sepration
+  174  cd file_sepration/
+  175  vi provider.tf
+  176  vi main.tf
+  177  vi data.tf
+  178  vi variables.tf
+  179  vi output.tf
+  180  terraform init
+  181  vi output.tf
+  182  terraform init
+  183  terraform validate
+  184  terraform plan
+  185  terraform apply
+  186  terraform destroy
+  187  ls
+  188  cat data.tf 
+  189  cat main.tf 
+  190  cat output.tf 
+  191  cat provider.tf 
+  192  cat variables.tf 
+  193  history
+  
+  ***************String variable***************
+  
+  [root@ip-172-31-29-236 string]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = var.ami
+  instance_type = var.instance_type
+
+  tags = {
+    Name = "raj"
+  }
+}
+
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+   description = "providing instance type"
+}
+
+variable "ami" {
+  type    = string
+  default = "ami-0568773882d492fc8"
+   description = "providing ami"
+}
+
+
+**************String and number variable************
+
+[root@ip-172-31-29-236 string]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = var.ami
+  instance_type = var.instance_type
+  count      = var.num
+  tags = {
+    Name = "raj"
+  }
+}
+
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+   description = "providing instance type"
+}
+
+variable "ami" {
+  type    = string
+  default = "ami-0568773882d492fc8"
+   description = "providing ami"
+}
+
+variable "num" {
+  type    = number
+  default = 3
+   description = "providing num"
+}
+
+************String and number band ool variable*
+
+[root@ip-172-31-29-236 string]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = var.ami
+  instance_type = var.instance_type
+  count      = var.num
+  associate_public_ip_address  = var.enable
+  tags = {
+    Name = "raj"
+  }
+}
+
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+   description = "providing instance type"
+}
+
+variable "ami" {
+  type    = string
+  default = "ami-0568773882d492fc8"
+   description = "providing ami"
+}
+
+variable "num" {
+  type    = number
+  default = 3
+   description = "providing num"
+}
+
+variable "enable" {
+  type    = bool
+  default = true
+   description = "providing enable"
+}
+
+*****************list variable*******************
+
+[root@ip-172-31-29-236 list]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "raj"
+  }
+}
+
+resource "aws_iam_user" "example" {
+count = length(var.user_name)
+name = var.user_name[count.index]
+
+
+}
+
+variable "user_name" {
+  type    = list(string)
+  default = ["user1", "user2" , "user3"]
+   description = "providing iam user"
+}
+
+
+*******************map variable*********8
+
+[root@ip-172-31-29-236 list]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+  tags = var.project_env
+}
+
+variable "project_env" {
+  type    = map(string)
+  default = {
+ project = "project_alpha"
+ env = "dev"
+}
+   description = "providing map"
+}
+
+*******************Var inside var*****************
+
+[root@ip-172-31-29-236 var]# cat main.tf 
+resource "aws_instance" "ec2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = var.instance_type
+  tags = {
+ Name = var.env
+}
+}
+[root@ip-172-31-29-236 var]# cat var.tf 
+variable "instance_type" {
+}
+variable "env" {
+}
+[root@ip-172-31-29-236 var]# cat stage.tfvars 
+instance_type = "t2.micro"
+env = "stage"
+[root@ip-172-31-29-236 var]# cat production.tfvars 
+instance_type = "t2.micro"
+env = "production"
+
+***********************local *************************
+
+
+[root@ip-172-31-29-236 local]# cat local.tf 
+locals { 
+  stagging-env = "stagging"
+
+}
+
+resource "aws_vpc" "myvpc"{
+cidr_block = "10.0.0.0/16"
+tags = {
+Name = "${local.stagging-env}-vpc-tag"
+}
+}
+
+resource "aws_subnet" "subnet" {
+  vpc_id     = aws_vpc.myvpc.id
+  cidr_block = "10.0.1.0/24"
+
+  tags = {
+    Name = "${local.stagging-env}-subnet-tag"
+  }
+}
+
+resource "aws_instance" "ec2" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+   subnet_id   = aws_subnet.subnet.id
+   
+  tags = {
+    Name = "${local.stagging-env}-instance-tag"
+  }
+}
+
+
+********************output******************
+
+[root@ip-172-31-29-236 output]# cat main.tf 
+resource "aws_instance" "web" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "HelloWorld"
+  }
+}
+
+
+output "ec2" {
+value = aws_instance.web.id
+}
+
+*******************Runtine value****************************************
+
+[root@ip-172-31-29-236 Sccanner]# cat var.tf 
+variable "instance"{
+
+}
+[root@ip-172-31-29-236 Sccanner]# cat main.tf 
+resource "aws_instance" "ec2-1" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = var.instance
+
+ tags = {
+    Name = "HelloWorld1"
+  }
+}
+
+  413  terraform init
+  414  terraform apply -var="instance=t2.micro"
+  415  terraform destroy
+
+
+***************Full ec2******************************************88S
+
+
+[root@ip-172-31-29-236 full-ec2]# cat main.tf 
+resource "aws_vpc" "prod-vpc" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "production"
+  }
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.prod-vpc.id
+
+}
+
+resource "aws_route_table" "prod-route-table" {
+  vpc_id = aws_vpc.prod-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  route {
+    ipv6_cidr_block        = "::/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "Prod"
+  }
+}
+
+resource "aws_subnet" "subnet-1" {
+  vpc_id     = aws_vpc.prod-vpc.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "us-east-2a"
+  tags = {
+    Name = "prod-subnet"
+}
+}
+
+resource "aws_route_table_association" "a" {
+  subnet_id         = aws_subnet.subnet-1.id
+  route_table_id = aws_route_table.prod-route-table.id
+}
+
+
+resource "aws_security_group" "allow_web" {
+  name        = "allow_web_traffic"
+  description = "Allow Web inbound traffic"
+  vpc_id      = aws_vpc.prod-vpc.id
+
+  ingress {
+    description      = "https"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+ }
+
+  ingress {
+    description      = "HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+ }
+
+
+  ingress {
+    description      = "SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+ }
+
+egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+ }
+
+  tags = {
+    Name = "allow_web"
+ }
+}
+
+resource "aws_network_interface" "web-server-nic" {
+  subnet_id       = aws_subnet.subnet-1.id
+  private_ips     = ["10.0.1.50"]
+  security_groups = [aws_security_group.allow_web.id]
+
+  }
+resource "aws_eip" "one" {
+  vpc                       = true
+  network_interface         = aws_network_interface.web-server-nic.id
+  associate_with_private_ip = "10.0.1.50"
+  depends_on                = [aws_internet_gateway.gw]
+}
+
+output "server_public_ip" {
+  value = aws_eip.one.public_ip
+}
+resource "aws_instance" "web-server-interface" {
+  ami           = "ami-0568773882d492fc8"
+  instance_type = "t2.micro"
+  availability_zone ="us-east-2a"
+  key_name = "LG"
+
+  network_interface {
+     device_index = 0
+     network_interface_id = aws_network_interface.web-server-nic.id
+  }
+
+  user_data = <<-EOF
+            #!/bin/bash
+            sudo yum update -y
+            sudo yum install httpd -y
+            sudo systemctl start httpd
+            sudo systemctl enable httpd
+            sudo bash -c 'echo your first web server > /var/www/html/index.html'
+            EOF
+  tags = {
+    Name = "web-server"
+  }
+}
+output "server_private_ip" {
+
+    value = aws_instance.web-server-interface.private_ip
+#    value = aws_instance.web-server-interface.id
+}
+
+
+**********************s3*********************************
+
+[root@ip-172-31-29-236 s3]# cat s3.tf 
+resource "aws_s3_bucket" "paramaaaaa" {
+  bucket = "pssdfgdpsdpsdpsd" 
+    tags = {
+    Name        = "My bucket"
+  acl    = "public"
+} 
+
+ versioning {
+    enabled = true
+  }
+}
+
+resource "aws_s3_object" "object" {
+  bucket = aws_s3_bucket.paramaaaaa.id
+  key    = "param.txt"
+  source = "/root/s3/param.txt"
+
+}
+
+
+***************************************************************
+
+[root@ip-172-31-29-236 for]# cat main.tf 
+variable "names" { 
+type = list(string)
+default =["apple", "orange", "banana"]
+}
+
+output "UPPER_names" {
+value = [for name in var.names : upper(name)]
+}
+
+***************for-each************************
+
+[root@ip-172-31-29-236 for-loop]# ls
+main.tf  terraform.tfstate  terraform.tfstate.backup
+[root@ip-172-31-29-236 for-loop]# cat main.tf 
+variable "user" {
+type = set(string)
+default = ["user111","user222","user333"]
+
+}
+resource "aws_iam_user" "group1" {
+  for_each = var.user
+    name =each.value
+  }
+  
+  ***********************************************
+  
+  [root@ip-172-31-29-236 s3]# cat s3.tf 
+resource "aws_s3_bucket" "bucket" {
+  bucket = "pssdfgdpsdpsdpsd" 
+    tags = {
+    Name        = "My bucket"
+  acl    = "public"
+} 
+
+ versioning {
+    enabled = true
+  }
+}
+
+#resource "aws_s3_object" "object" {
+# bucket = aws_s3_bucket.bucket.id
+#key    = "param.txt"
+#  source = "/root/s3/param.txt"
+
+#}
+
+resource "aws_s3_bucket_object" "test" {
+for_each = fileset(path.module,"**/*.txt")
+bucket = aws_s3_bucket.bucket.id
+key = each.value
+source = "${path.module}/${each.value}"
+}
+
+output "fileset-result" {
+value = fileset(path.module, "**/*.txt")
+}
+
+************************************************
+
+[root@ip-172-31-29-236 s3]# cat s3.tf 
+resource "aws_s3_bucket" "bucket" {
+  bucket = "pssdfgdpsdpsdpsd" 
+    tags = {
+    Name        = "My bucket"
+  acl    = "public"
+} 
+
+ versioning {
+    enabled = true
+  }
+}
+
+#resource "aws_s3_object" "object" {
+# bucket = aws_s3_bucket.bucket.id
+#key    = "param.txt"
+#  source = "/root/s3/param.txt"
+
+#}
+
+resource "aws_s3_bucket_object" "test" {
+for_each = fileset("/root/s3","**/*.txt")
+bucket = aws_s3_bucket.bucket.id
+key = each.value
+source = "/root/s3/${each.value}"
+}
+
+output "fileset-result" {
+value = fileset("/root/s3","**/*.txt")
+}
+
+******************install docker*****************************************8
+
+[root@ip-172-31-29-236 docker]# cat doc.tf 
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.16"
+    }
+  }
+}
+  provider "aws" {
+  region  = "us-east-2"
+}
+  resource "aws_instance" "ec2_variable" {
+    ami               = "ami-0960ab670c8bb45f3"
+    instance_type     = "t2.micro"
+    vpc_security_group_ids = ["sg-0168500ced4112968"]
+    availability_zone = "us-east-2b"
+    user_data         = file("docker.sh")
+    key_name          = "LG"
+    tags              = {
+      Name = "Docker Container"
+    }
+  }
+output "instance_ip_addr" {
+  value = aws_instance.ec2_variable.public_ip
+}
+
+[root@ip-172-31-29-236 docker]# cat docker.sh 
+#!/bin/bash
+# First check if there are any updates
+sudo apt-get update -y
+# allow apt to use repositories over the HTTPS protocol
+sudo apt-get install apt-transport-https ca-certificates curl gnupg-agent software-properties-common -y
+
+# Add docker's official GPG key by executing following command
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+# Add docker's repositories
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+# update and install docker
+sudo apt-get install docker-ce docker-ce-cli containerd.io -y
+sudo chmod 666 /var/run/docker.sock
+
+#creating docker container
+docker run -d --name docker-container -h linux.public.ip -p 8080:80 httpd httpd
+
+
+*************************************************************************************
